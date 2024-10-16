@@ -5,7 +5,7 @@
 This is the official code for the paper "Learning an Actionable Discrete Diffusion Policy via Large-Scale Actionless Video Pre-Training".
 We introduce a novel framework that leverages a unified discrete diffusion to combine generative pre-training on human videos and policy fine-tuning on a small number of action-labeled robot videos. We aim to incorporate foresight from predicted videos to facilitate efficient policy learning.
 
-📝 [Paper](https://arxiv.org/abs/2402.14407) \|  [中文blog@知乎](https://zhuanlan.zhihu.com/p/684830185) \| [公众号@量子位](https://zhuanlan.zhihu.com/p/684830185)
+📝 [Paper](https://arxiv.org/abs/2402.14407) \|  [中文blog@知乎](https://zhuanlan.zhihu.com/p/684830185) \| [公众号@量子位](https://mp.weixin.qq.com/s/bFVwWpjFQpTTWkbpaEqYCQ)
 ## Environment Configurations
 - [ ] We will update the detailed setup asap.
 
