@@ -1385,7 +1385,7 @@ class MetaDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
 
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, num_demos=20, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, num_demos=20, vqvae=METAWORLD_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1590,7 +1590,7 @@ class MetaFinetuneDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, num_demos=20, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, num_demos=20, tasks=None, pretrain=True, vqvae=METAWORLD_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1744,7 +1744,7 @@ class R3MMetaDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1895,7 +1895,7 @@ class ContinuousDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -2042,7 +2042,7 @@ class DTDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
