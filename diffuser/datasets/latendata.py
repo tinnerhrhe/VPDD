@@ -30,137 +30,9 @@ import pprint
 import json
 from scipy.spatial.transform import Rotation
 #from helpers import utils
-class VideoDataset(data.Dataset):
-    """ Generic dataset for videos files stored in folders
-    Returns BCTHW videos in the range [-0.5, 0.5] """
-    exts = ['avi', 'mp4', 'webm', 'png']
-
-    def __init__(self, data_folder, sequence_length, devices, horizon, pretrain=True, vqvae='./lightning_logs/version_40/checkpoints/last.ckpt', train=True, resolution=96):
-        """
-        Args:
-            data_folder: path to the folder with videos. The folder
-                should contain a 'train' and a 'test' directory,
-                each with corresponding videos stored
-            sequence_length: length of extracted video sequences
-        """
-        super().__init__()
-        self.train = train
-        self.pretrain=pretrain
-        self.device = devices
-        self.sequence_length = sequence_length
-        self.resolution = resolution
-        self.load_vqvae(vqvae)
-        #self.classes = ['PickCube-v0']
-        folder = osp.join(data_folder, 'ego4d')
-        folder_robot = osp.join(data_folder, 'RLBench')
-        files = sum([glob.glob(osp.join(folder, f'*.{ext}'), recursive=True)
-                      for ext in self.exts], [])
-        print(files)
-        #print(folder)
-        exts = ['png']
-        cams = ['front','left_shoulder','right_shoulder','wrist']
-        self.task_desc = []
-        self.files_obs = []
-        li = os.listdir(folder_robot)
-        for task in li:
-            for x in range(10):
-                self.files_obs.append(sum([glob.glob(osp.join(folder_robot, task, "all_variations", "episodes", f'episode{x}', "front_rgb", f'*.{ext}'), recursive=True) for ext in exts], []))
-                f = open(osp.join(folder_robot, task, "all_variations", "episodes", f'episode{x}', "variation_descriptions.pkl"), 'rb')
-                self.task_desc.append(pickle.load(f))
-        cache_file = osp.join(folder, f"metadata_{sequence_length}.pkl")
-        # if not osp.exists(cache_file):
-        #     clips = VideoClips(files, sequence_length,  frames_between_clips=8, num_workers=32)
-        #     pickle.dump(clips.metadata, open(cache_file, 'wb'))
-        # else:
-        #     metadata = pickle.load(open(cache_file, 'rb'))
-        #     clips = VideoClips(files, sequence_length, frames_between_clips=8,
-        #                        _precomputed_metadata=metadata)
-        clips = VideoClips(files, sequence_length,  frames_between_clips=8, num_workers=32)
-        self._clips = clips
-        self.classes = ['human_hands_interaction']
-        print("NUMS:", self._clips.num_clips())
-        print("OBS_NUMS:", len(self.files_obs))
-        self.prd_len = horizon
-        model, _ = load_clip('RN50', jit=False, device=devices)
-        self.clip_model = build_model(model.state_dict())
-        self.clip_model.to(devices)
-        del model
-        self.process_data()
-        tokens = tokenize(["There are observations about human hands interacting with objects"]).numpy()
-        token_tensor = torch.from_numpy(tokens).to(devices)
-        self.wild_embeds, lang_embs = self.clip_model.encode_text_with_embeddings(token_tensor)
-        self.wild_embeds = self.wild_embeds[0].float().detach().cpu().numpy()
-        print(self.wild_embeds.shape)
-    def process_data(self):
-        print("BEGIN PROCESS DATA")
-        self.wild_obs = []
-        self.robot_obs = []
-        self.robot_datas = []
-        self.robot_len, self.wild_len = 0, 0
-
-        self.robot_datas = [np.load(f'./data/robot_latents_v1_{idr}.npz')['robot'] for idr in range(540)]
-        self.wild_obs = np.concatenate([np.load(f'./data/wild_latents_v1_{idw}.npz')['wild'] for idw in range(1,10)], axis=0)
-        self.wild_len = self.wild_obs.shape[0]
-        self.robot_len = len(self.robot_obs)
-        self.indices = []
-        self.robot_task_desc = []
-        for i, term in enumerate(self.robot_datas):
-            #if i % 10: continue
-            tokens = tokenize(self.task_desc[i]).numpy()
-            token_tensor = torch.from_numpy(tokens).to(self.device)
-            lang_feats, lang_embs = self.clip_model.encode_text_with_embeddings(token_tensor)
-            self.robot_task_desc.append(lang_feats[0].float().detach().cpu().numpy())
-            max_start = min(term.shape[0] - 1, term.shape[0] - self.prd_len)
-            for start in range(max_start):
-                self.indices.append((i, start))
-        print(len(self.indices))
-        #self.indices = np.array(indices)
-        
-    def load_vqvae(self, ckpt):
-        from videogpt.download import load_vqvae
-        if not os.path.exists(ckpt):
-            self.vqvae = load_vqvae(ckpt)
-        else:
-            self.vqvae =  VQVAE.load_from_checkpoint(ckpt)#.to(self.device)
-        self.vqvae.eval()
-
-    @property
-    def n_classes(self):
-        return len(self.classes)
-    def __len__(self):
-        return len(self.indices) #self.robot_len - self.prd_len
-
-    def __getitem__(self, idx):
-        path_ind, start = self.indices[idx]
-        #history  = np.zeros(self.wild_obs[0].shape)
-        idx_w = random.randint(0, self.wild_len - self.prd_len)
-        traj_latents = np.stack([self.robot_datas[path_ind][start:idx+self.prd_len], self.wild_obs[idx_w:idx_w+self.prd_len]],axis=0, dtype=torch.float64)
-        history = np.zeros((2,2,)+traj_latents.shape[2:])
-        k = 2
-        while start-k >= 0 and idx_w-k >= 0 and k >= 1:
-            #print(start,k,idx_w)
-            history[:, 2-k] = np.stack([self.robot_datas[path_ind][start-k], self.wild_obs[idx_w-k]],axis=0)
-            k -= 1
-        task = np.array([self.robot_task_desc[0],self.wild_embeds])
-        
-        traj_latents = self.vqvae.codebook.dictionary_lookup(torch.from_numpy(traj_latents)).cpu().numpy()
-        history = self.vqvae.codebook.dictionary_lookup(torch.from_numpy(history).long()).cpu().numpy()
-        if not self.pretrain:
-            dic_traj = {
-                'obs':traj_latents,
-                'act':actions,
-            }
-        else:
-            dic_traj = {
-                'obs':traj_latents,
-            }
-        #print(traj_latents.max(),traj_latents.min())
-        batch = TaskBatch(dic_traj, history, task, 1)
-        #batch = TaskBatch(traj_latents, history, task, 1)
-        #print(traj_latents.shape, history.shape,task.shape)
-        
-        return batch
-def keypoint_discovery(demo,
+METAWORLD_VQVAE = "Your saved path here"
+RLBENCH_VQVAE = "Your saved path here"
+ def keypoint_discovery(demo,
                        stopping_delta=0.1,
                        method='heuristic'):
     episode_keypoints = []
@@ -431,7 +303,7 @@ class MultiviewFinetuneDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
 
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae='./lightning_logs/version_52/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=RLBENCH_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1282,7 +1154,7 @@ class MultiViewDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
 
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae='./lightning_logs/version_52/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=RLBENCH_VQVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1513,7 +1385,7 @@ class MetaDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
 
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, num_demos=20, vqvae='./lightning_logs/version_90/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, num_demos=20, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1718,7 +1590,7 @@ class MetaFinetuneDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, num_demos=20, tasks=None, pretrain=True, vqvae='./lightning_logs/version_90/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, num_demos=20, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -1872,7 +1744,7 @@ class R3MMetaDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae='./lightning_logs/version_90/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -2023,7 +1895,7 @@ class ContinuousDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae='./lightning_logs/version_90/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -2170,7 +2042,7 @@ class DTDataset(data.Dataset):
     Returns BCTHW videos in the range [-0.5, 0.5] """
     exts = ['avi', 'mp4', 'webm', 'png']
     #./lightning_logs/version_45/checkpoints/results/val/recon_loss=0.0003-v2.ckpt
-    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae='./lightning_logs/version_90/checkpoints/last.ckpt', train=True, resolution=96):
+    def __init__(self, data_folder, sequence_length, devices, horizon, tasks=None, pretrain=True, vqvae=METAWORLD_VAVAE, train=True, resolution=96):
         """
         Args:
             data_folder: path to the folder with videos. The folder
@@ -2346,66 +2218,3 @@ def preprocess(video, resolution, sequence_length=None):
     video -= 0.5
 
     return video
-
-class VideoData(pl.LightningDataModule):
-
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-
-    @property
-    def n_classes(self):
-        dataset = self._dataset(True)
-        return dataset.n_classes
-    def sample_dataloader(self):
-        Dataset = VideoDataset if osp.isdir(self.args.data_path) else VideoDataset
-        dataset = Dataset(self.args.data_path, self.args.sequence_length,
-                          train=train, resolution=self.args.resolution)
-        if dist.is_initialized():
-            sampler = data.distributed.DistributedSampler(
-                dataset, num_replicas=dist.get_world_size(), rank=dist.get_rank()
-            )
-        else:
-            sampler = None
-        dataloader = data.DataLoader(
-            dataset,
-            batch_size=self.args.batch_size,
-            num_workers=self.args.num_workers,
-            pin_memory=True,
-            sampler=sampler,
-            shuffle=sampler is None
-        )
-        return dataloader
-    def _dataset(self, train):
-        Dataset = VideoDataset if osp.isdir(self.args.data_path) else VideoDataset
-        dataset = Dataset(self.args.data_path, self.args.sequence_length,
-                          train=train, resolution=self.args.resolution)
-        return dataset
-
-
-    def _dataloader(self, train):
-        dataset = self._dataset(train)
-        if dist.is_initialized():
-            sampler = data.distributed.DistributedSampler(
-                dataset, num_replicas=dist.get_world_size(), rank=dist.get_rank()
-            )
-        else:
-            sampler = None
-        dataloader = data.DataLoader(
-            dataset,
-            batch_size=self.args.batch_size,
-            num_workers=self.args.num_workers,
-            pin_memory=True,
-            sampler=sampler,
-            shuffle=sampler is None
-        )
-        return dataloader
-
-    def train_dataloader(self):
-        return self._dataloader(True)
-
-    def val_dataloader(self):
-        return self._dataloader(False)
-
-    def test_dataloader(self):
-        return self.val_dataloader()
