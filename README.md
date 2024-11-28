@@ -7,8 +7,16 @@ We introduce a novel framework that leverages a unified discrete diffusion to co
 
 📝 [Paper](https://arxiv.org/abs/2402.14407) \|  [中文blog@知乎](https://zhuanlan.zhihu.com/p/684830185) \| [公众号@量子位](https://mp.weixin.qq.com/s/bFVwWpjFQpTTWkbpaEqYCQ)
 ## Environment Configurations
-- [ ] We will update the detailed setup asap.
+```
+conda env create -f environment.yml
+conda activate VPDD
+```
+## Dataset
+- For experiments on RLBench, you can use [pre-generated dataset](https://drive.google.com/drive/folders/0B2LlLwoO3nfZfkFqMEhXWkxBdjJNNndGYl9uUDQwS1pfNkNHSzFDNGwzd1NnTmlpZXR1bVE?resourcekey=0-jRw5RaXEYRLe2W6aNrNFEQ) provided by [PerAct](https://github.com/peract/peract).
+- For experiments on MetaWorld, we use the script policy provided in [MetaWorld](https://github.com/Farama-Foundation/Metaworld) to collect image-based data. You can refer to [generate_metaworld_dataset.py](https://github.com/pairlab/QueST/blob/main/scripts/generate_metaworld_dataset.py) for implementation.
 
+## Model
+The pre-trained VQ-VAE models and discrete diffusion models are available at https://huggingface.co/haoranhe/VPDD-pretrain. You can download them and change the `path` in the corresponding code.
 ## Pre-training
 
 We first train a VQ-VAE to learn a unified discrete latent codebook:
@@ -28,9 +36,7 @@ After pre-training, we fine-tune VPDD with a limited set of robot data:
 `python scripts/pretrain_meta.py --seed 1 --model models.VideoDiffuserModel --diffusion models.GaussianVideoDiffusion --loss_type video --device cuda:0 --batch_size 1 --loader datasets.MetaFinetuneDataset --pretrain False`
 
 `python scripts/pretrain_video_diff.py --seed 1 --model models.VideoDiffuserModel --diffusion models.MultiviewVideoDiffusion --loss_type video --device cuda:0 --batch_size 10 --loader datasets.MultiviewFinetuneDataset --pretrain False --act_classes 360`
-## Dataset
 
-- [ ]  Our datasets are derived from Ego4d videos and collections from Meta-World and RLBench environments. The processed dataset will be open-sourced as soon as possible.
 
 ## Acknowledgment 
 Our code for VPDD is partially based on the following awesome projects:
